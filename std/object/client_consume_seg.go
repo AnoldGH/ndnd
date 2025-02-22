@@ -46,12 +46,24 @@ type retxEntry struct {
 	retries int
 }
 
-func newRrSegFetcher(client *Client) rrSegFetcher {
+func newRrSegFetcher(client *Client, options *cong.CongestionOptions) rrSegFetcher {
+	if options == nil {	// default options
+		options = cong.NewCongestionOptions()
+	}
+
+	var window cong.CongestionWindow
+	switch options.Type {
+	case cong.Fixed:
+		window = cong.NewFixedCongestionWindow(options)
+	case cong.AIMD:
+		window = cong.NewAIMDCongestionWindow(options)
+	}
+
 	return rrSegFetcher{
 		mutex:       sync.RWMutex{},
 		client:      client,
 		streams:     make([]*ConsumeState, 0),
-		window:      cong.NewFixedCongestionWindow(100),
+		window:      window,
 		outstanding: 0,
 		retxQueue: 	 list.New(),
 		txCounter: 	 make(map[*ConsumeState]int),
@@ -383,4 +395,11 @@ func (s *rrSegFetcher) enqueueForRetransmission(state *ConsumeState, seg uint64,
 	defer s.mutex.Unlock()
 
 	s.retxQueue.PushBack(&retxEntry{state, seg, retries})
+}
+
+func (s *rrSegFetcher) updateCongestionOptions(options *cong.CongestionOptions) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.window.UpdateOptions(options)
 }

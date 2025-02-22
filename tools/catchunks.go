@@ -10,6 +10,7 @@ import (
 	"github.com/named-data/ndnd/std/log"
 	"github.com/named-data/ndnd/std/ndn"
 	"github.com/named-data/ndnd/std/object"
+	cong "github.com/named-data/ndnd/std/object/congestion"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,9 @@ type CatChunks struct{}
 func CmdCatChunks() *cobra.Command {
 	cc := CatChunks{}
 
-	return &cobra.Command{
+	var window_type = cong.Fixed
+
+	cmdCat := &cobra.Command{
 		GroupID: "tools",
 		Use:     "cat PREFIX",
 		Short:   "Retrieve object under a name prefix",
@@ -28,13 +31,17 @@ The object contents are written to stdout on success.`,
 		Example: `  ndnd cat /my/example/data > data.bin`,
 		Run:     cc.run,
 	}
+
+	cmdCat.Flags().Var(&window_type, "window-type", "Congestion window type (fixed, aimd)")
+
+	return cmdCat
 }
 
 func (cc *CatChunks) String() string {
 	return "cat"
 }
 
-func (cc *CatChunks) run(_ *cobra.Command, args []string) {
+func (cc *CatChunks) run(c *cobra.Command, args []string) {
 	name, err := enc.NameFromStr(args[0])
 	if err != nil {
 		log.Fatal(cc, "Invalid name", "name", args[0])
@@ -58,6 +65,10 @@ func (cc *CatChunks) run(_ *cobra.Command, args []string) {
 		return
 	}
 	defer cli.Stop()
+
+	// congestion control setup
+	options := cong.NewCongestionOptions()
+	options.Type = *(c.Flags().Lookup("window-type").Value.(*cong.WindowType))
 
 	done := make(chan ndn.ConsumeState)
 	t1, t2 := time.Now(), time.Now()

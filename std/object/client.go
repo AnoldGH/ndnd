@@ -25,7 +25,7 @@ func NewClient(engine ndn.Engine, store ndn.Store, trust *sec.TrustConfig) ndn.C
 	client.engine = engine
 	client.store = store
 	client.trust = trust
-	client.fetcher = newRrSegFetcher(client)
+	client.fetcher = newRrSegFetcher(client, nil)
 	return client
 }
 
@@ -64,6 +64,11 @@ func (c *Client) Engine() ndn.Engine {
 // Get the underlying store
 func (c *Client) Store() ndn.Store {
 	return c.store
+}
+
+// Get the underlying fetcher
+func (c *Client) Fetcher() *rrSegFetcher {
+	return &c.fetcher
 }
 
 // IsCongested returns true if the client is congested

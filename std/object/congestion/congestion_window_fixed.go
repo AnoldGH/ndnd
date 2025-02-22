@@ -6,9 +6,9 @@ type FixedCongestionWindow struct {
 	eventCh		chan WindowEvent	// channel for emitting window change event
 }
 
-func NewFixedCongestionWindow(cwnd int) *FixedCongestionWindow {
+func NewFixedCongestionWindow(options *CongestionOptions) *FixedCongestionWindow {
 	return &FixedCongestionWindow{
-		window: cwnd,
+		window: options.InitCwnd,
 		eventCh: make(chan WindowEvent),
 	}
 }
@@ -36,4 +36,8 @@ func (cw *FixedCongestionWindow) EventChannel() <-chan WindowEvent {
 
 func (cw *FixedCongestionWindow) HandleSignal(signal CongestionSignal) {
 	// intentionally left blank: fixed CW doesn't respond to signals
+}
+
+func (cw *FixedCongestionWindow) UpdateOptions(*CongestionOptions) {
+	// intentionally left blank: fixed CW doesn't have options
 }

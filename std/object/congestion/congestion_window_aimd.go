@@ -2,6 +2,7 @@ package congestion
 
 import (
 	"math"
+	"sync"
 	"time"
 
 	"github.com/named-data/ndnd/std/log"
@@ -18,20 +19,23 @@ type AIMDCongestionWindow struct {
 	aiStep		int					// additive increase step
 	mdCoef		float64 			// multiplicative decrease coefficient
 	resetCwnd	bool				// whether to reset cwnd after decrease
+
+	mutex 		sync.Mutex			// mutex for options
 }
 
 // TODO: should we bundle the parameters into an AIMDOption struct?
 
-func NewAIMDCongestionWindow(cwnd int) *AIMDCongestionWindow {
+func NewAIMDCongestionWindow(options *CongestionOptions) *AIMDCongestionWindow {
 	return &AIMDCongestionWindow{
-		window: cwnd,
+		window: options.InitCwnd,
 		eventCh: make(chan WindowEvent),
 
-		initCwnd: cwnd,
-		ssthresh: math.MaxInt,
-		aiStep: 1,
-		mdCoef: 0.5,
-		resetCwnd: false,		// defaults
+		initCwnd: options.InitCwnd,
+		ssthresh: options.ssthresh,
+		minSsthresh: options.minSsthresh,
+		aiStep: options.aiStep,
+		mdCoef: options.mdCoef,
+		resetCwnd: options.resetCwnd,			// defaults
 	}
 }
 
@@ -93,4 +97,16 @@ func (cw *AIMDCongestionWindow) EmitWindowEvent(age time.Time, cwnd int) {
 		// if the channel is full, we log the change event
 		log.Debug(cw, "Window size changes", "window", cw.window)
 	}
+}
+
+func (cw *AIMDCongestionWindow) UpdateOptions(options *CongestionOptions) {
+	cw.mutex.Lock()
+	defer cw.mutex.Unlock()
+
+	cw.initCwnd = options.InitCwnd
+	cw.ssthresh = options.ssthresh
+	cw.minSsthresh = options.minSsthresh
+	cw.aiStep = options.aiStep
+	cw.mdCoef = options.mdCoef
+	cw.resetCwnd = options.resetCwnd
 }

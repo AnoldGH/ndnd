@@ -27,4 +27,6 @@ type CongestionWindow interface {
 	Size() int
 	IncreaseWindow()
 	DecreaseWindow()
+
+	UpdateOptions(*CongestionOptions)		// update options
 }
