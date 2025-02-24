@@ -9,13 +9,13 @@ import (
 
 // AIMDCongestionControl is an implementation of CongestionWindow using Additive Increase Multiplicative Decrease algorithm
 type AIMDCongestionWindow struct {
-	window 		int					// window size
+	window 		float64				// window size - float64 to allow percentage growth in congestion avoidance phase
 	eventCh		chan WindowEvent	// channel for emitting window change event
 
-	initCwnd	int					// initial window size
-	ssthresh 	int					// slow start threshold
-	minSsthresh int					// minimum slow start threshold
-	aiStep		int					// additive increase step
+	initCwnd	float64				// initial window size
+	ssthresh 	float64				// slow start threshold
+	minSsthresh float64				// minimum slow start threshold
+	aiStep		float64				// additive increase step
 	mdCoef		float64 			// multiplicative decrease coefficient
 	resetCwnd	bool				// whether to reset cwnd after decrease
 }
@@ -24,13 +24,13 @@ type AIMDCongestionWindow struct {
 
 func NewAIMDCongestionWindow(cwnd int) *AIMDCongestionWindow {
 	return &AIMDCongestionWindow{
-		window: cwnd,
+		window: float64(cwnd),
 		eventCh: make(chan WindowEvent),
 
-		initCwnd: cwnd,
-		ssthresh: math.MaxInt,
-		minSsthresh: 2,
-		aiStep: 1,
+		initCwnd: float64(cwnd),
+		ssthresh: math.MaxFloat64,
+		minSsthresh: 2.0,
+		aiStep: 1.0,
 		mdCoef: 0.5,
 		resetCwnd: false,		// defaults
 	}
@@ -42,7 +42,7 @@ func (cw *AIMDCongestionWindow) String() string {
 }
 
 func (cw *AIMDCongestionWindow) Size() int {
-	return cw.window
+	return int(math.Floor(cw.window))
 }
 
 func (cw *AIMDCongestionWindow) IncreaseWindow() {
@@ -56,11 +56,11 @@ func (cw *AIMDCongestionWindow) IncreaseWindow() {
 		// https://github.com/named-data/ndn-tools/blob/130975c4be69d126fede77d47a50580d5e8b25b0/tools/chunks/catchunks/pipeline-interests-aimd.cpp#L45
 	}
 
-	cw.EmitWindowEvent(time.Now(), cw.window)	// window change signal
+	cw.EmitWindowEvent(time.Now(), cw.Size())	// window change signal
 }
 
 func (cw *AIMDCongestionWindow) DecreaseWindow() {
-	cw.ssthresh = int(math.Max(float64(cw.window) * cw.mdCoef, float64(cw.minSsthresh)))
+	cw.ssthresh = math.Max(cw.window * cw.mdCoef, cw.minSsthresh)
 
 	if cw.resetCwnd {
 		cw.window = cw.initCwnd
@@ -68,7 +68,7 @@ func (cw *AIMDCongestionWindow) DecreaseWindow() {
 		cw.window = cw.ssthresh
 	}
 
-	cw.EmitWindowEvent(time.Now(), cw.window)	// window change signal
+	cw.EmitWindowEvent(time.Now(), cw.Size())	// window change signal
 }
 
 func (cw *AIMDCongestionWindow) EventChannel() <-chan WindowEvent {
