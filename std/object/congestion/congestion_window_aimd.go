@@ -32,7 +32,7 @@ func NewAIMDCongestionWindow(cwnd int) *AIMDCongestionWindow {
 		minSsthresh: 2.0,
 		aiStep: 1.0,
 		mdCoef: 0.5,
-		resetCwnd: false,		// defaults
+		resetCwnd: true,		// defaults
 	}
 }
 
