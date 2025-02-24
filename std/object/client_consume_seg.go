@@ -55,7 +55,7 @@ func newRrSegFetcher(client *Client) rrSegFetcher {
 		outstanding: 0,
 		retxQueue: 	 list.New(),
 		txCounter: 	 make(map[*ConsumeState]int),
-		maxRetries:  3,
+		maxRetries:  -1,
 	}
 }
 
