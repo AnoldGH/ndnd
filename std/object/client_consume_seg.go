@@ -270,6 +270,8 @@ func (s *rrSegFetcher) handleResult(args ndn.ExpressCallbackArgs, state *Consume
 	default:	// treat as irrecoverable error for now
 		state.finalizeError(fmt.Errorf("%w: fetch seg failed with result: %s", ndn.ErrNetwork, args.Result))
 	}
+
+	s.check()	// check for more work
 }
 
 // handleData is called when the interest result is processed and the data is ready to be validated.
@@ -282,7 +284,6 @@ func (s *rrSegFetcher) handleData(args ndn.ExpressCallbackArgs, state *ConsumeSt
 		} else {
 			s.handleValidatedData(args, state)
 		}
-		s.check()
 	})
 }
 
