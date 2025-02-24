@@ -266,6 +266,7 @@ func (s *rrSegFetcher) handleResult(args ndn.ExpressCallbackArgs, state *Consume
 
 	case ndn.InterestResultData:	// data is successfully retrieved
 		s.handleData(args, state)
+		s.window.HandleSignal(cong.SigData)
 
 	default:	// treat as irrecoverable error for now
 		state.finalizeError(fmt.Errorf("%w: fetch seg failed with result: %s", ndn.ErrNetwork, args.Result))
