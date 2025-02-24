@@ -29,6 +29,7 @@ func NewAIMDCongestionWindow(cwnd int) *AIMDCongestionWindow {
 
 		initCwnd: cwnd,
 		ssthresh: math.MaxInt,
+		minSsthresh: 2,
 		aiStep: 1,
 		mdCoef: 0.5,
 		resetCwnd: false,		// defaults
