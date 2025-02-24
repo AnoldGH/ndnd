@@ -24,7 +24,7 @@ func NewText(w io.Writer) *Logger {
 			Level:       slog.Level(LevelTrace),
 			ReplaceAttr: replaceAttr,
 		})),
-		level: LevelInfo,
+		level: LevelDebug,
 	}
 }
 
