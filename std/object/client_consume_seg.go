@@ -167,7 +167,18 @@ func (s *rrSegFetcher) check() {
 		if s.retxQueue.Len() > 0 {
 			log.Debug(nil, "Retransmitting")
 
-			retx := s.retxQueue.Remove(s.retxQueue.Front()).(*retxEntry)
+			var retx *retxEntry
+
+			s.mutex.Lock()
+			front := s.retxQueue.Front()
+			if front != nil {
+				retx = s.retxQueue.Remove(front).(*retxEntry)
+				s.mutex.Unlock()
+			} else {
+				s.mutex.Unlock()
+				continue
+			}
+
 			state = retx.state
 			seg = retx.seg
 			retries = retx.retries
@@ -179,8 +190,10 @@ func (s *rrSegFetcher) check() {
 			}
 
 			// update window parameters
+			s.mutex.Lock()
 			seg = uint64(state.wnd[2])
 			state.wnd[2]++
+			s.mutex.Unlock()
 		}
 
 		// build interest
