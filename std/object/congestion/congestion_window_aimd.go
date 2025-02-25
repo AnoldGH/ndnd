@@ -2,6 +2,7 @@ package congestion
 
 import (
 	"math"
+	"sync"
 	"time"
 
 	"github.com/named-data/ndnd/std/log"
@@ -9,6 +10,8 @@ import (
 
 // AIMDCongestionControl is an implementation of CongestionWindow using Additive Increase Multiplicative Decrease algorithm
 type AIMDCongestionWindow struct {
+	mutex		sync.RWMutex
+
 	window 		float64				// window size - float64 to allow percentage growth in congestion avoidance phase
 	eventCh		chan WindowEvent	// channel for emitting window change event
 
@@ -42,24 +45,29 @@ func (cw *AIMDCongestionWindow) String() string {
 }
 
 func (cw *AIMDCongestionWindow) Size() int {
+	cw.mutex.RLock()
+	defer cw.mutex.RUnlock()
+
 	return int(math.Floor(cw.window))
 }
 
 func (cw *AIMDCongestionWindow) IncreaseWindow() {
+	cw.mutex.Lock()
+
 	if cw.window < cw.ssthresh {
 		cw.window += cw.aiStep					// additive increase
 	} else {
 		cw.window += cw.aiStep / cw.window		// congestion avoidance
-
-		// note: the congestion avoidance formula differs from RFC 5681 Section 3.1
-		// 	recommendations and is borrowed from ndn-tools/catchunks, check
-		// https://github.com/named-data/ndn-tools/blob/130975c4be69d126fede77d47a50580d5e8b25b0/tools/chunks/catchunks/pipeline-interests-aimd.cpp#L45
 	}
+
+	cw.mutex.Unlock()
 
 	cw.EmitWindowEvent(time.Now(), cw.Size())	// window change signal
 }
 
 func (cw *AIMDCongestionWindow) DecreaseWindow() {
+	cw.mutex.Lock()
+
 	cw.ssthresh = math.Max(cw.window * cw.mdCoef, cw.minSsthresh)
 
 	if cw.resetCwnd {
@@ -67,6 +75,8 @@ func (cw *AIMDCongestionWindow) DecreaseWindow() {
 	} else {
 		cw.window = cw.ssthresh
 	}
+
+	cw.mutex.Unlock()
 
 	cw.EmitWindowEvent(time.Now(), cw.Size())	// window change signal
 }
