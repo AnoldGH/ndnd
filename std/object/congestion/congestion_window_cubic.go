@@ -16,7 +16,7 @@ type CUBICCongestionWindow struct {
 	window 		float64					// window size
 	eventCh		chan WindowEvent		// channel for emitting window change event
 
-	rttEstimator 	RTTEstimator		// RTT estimator
+	rttEstimator 	*RTTEstimator		// RTT estimator
 
 	ssthresh		float64				// slow start threshold
 	minSsthresh 	float64				// minimum slow start threshold
@@ -26,15 +26,16 @@ type CUBICCongestionWindow struct {
 	windowMax 		float64				// maximum window size
 	lastWindowMax 	float64				// last maximum window size
 	fastConvergence bool				// whether to use fast convergence
+	tcpFriendliness bool				// whether to use TCP-friendly mode
 	lastDecrease 	time.Time			// time of last window-decrease event
 }
 
-func NewCUBICCongestionWindow(cwnd int) *CUBICCongestionWindow {
+func NewCUBICCongestionWindow(cwnd int, rttEstimator *RTTEstimator) *CUBICCongestionWindow {
 	return &CUBICCongestionWindow{
 		window: float64(cwnd),
 		eventCh: make(chan WindowEvent),
 
-		rttEstimator: NewKarnRTTEstimator(0.1, 0.1),
+		rttEstimator: rttEstimator,
 
 		ssthresh: math.MaxFloat64,
 		minSsthresh: 2.0,
@@ -44,6 +45,7 @@ func NewCUBICCongestionWindow(cwnd int) *CUBICCongestionWindow {
 		windowMax: float64(cwnd),
 		lastWindowMax: float64(cwnd),
 		fastConvergence: true,
+		tcpFriendliness: false,
 		lastDecrease: time.Now(),
 	}
 }
@@ -61,30 +63,45 @@ func (cw *CUBICCongestionWindow) Size() int {
 
 // Cubic update algorithm
 func (cw *CUBICCongestionWindow) CubicUpdate() {
-	rtt := cw.rttEstimator.EstimatedRTT().Seconds()			// estimated RTT
+	rtt := 0.0
+	if cw.rttEstimator != nil {
+		rtt = (*cw.rttEstimator).EstimatedRTT().Seconds()			// estimated RTT
+	}
+
 	t := time.Since(cw.lastDecrease).Abs().Seconds()		// time since last decrease
 	k := math.Cbrt((cw.windowMax * (1 - cw.mdCoef)) / cw.c)	// time takes to increase window to windowMax
 
 	// estimated cubic window size
 	wCubic := cw.c * math.Pow(t + rtt - k, 3) + cw.windowMax
+	log.Debug(cw, "Cubic update", "wCubic", wCubic, "window", cw.window)
 
-	// TCP-friendly window size
-	wEst := cw.windowMax * cw.mdCoef + 3 * (1 - cw.mdCoef) / (1 + cw.mdCoef) * t / rtt
+	// TCP-friendly mode
+	if cw.tcpFriendliness && cw.rttEstimator != nil {
+		// TCP-friendly window size
+		wEst := cw.windowMax * cw.mdCoef + 3 * (1 - cw.mdCoef) / (1 + cw.mdCoef) * t / rtt
+		log.Debug(cw, "Estimated TCP update", "wEst", wEst, "window", cw.window)
 
-	// update window size
-	if cw.window < wEst {
-		cw.window = wEst
-	} else {
-		cw.window += (wCubic - cw.window) / cw.window
+		// update window size
+		if cw.window < wEst {
+			cw.window = wEst
+			log.Debug(cw, "TCP-friendly increment", "wEst", wEst, "window", cw.window)
+			return
+		}
 	}
+
+	// note: (wCubic - cw.window) can sometimes be negative, which decreases the window size
+	//     	and causes confusing behavior since the window size is expected to "increment",
+	//		as mentioned in the original document. We only take the positive increment to simplify measurements.
+	cw.window += math.Max((wCubic - cw.window) / cw.window, 0)
+	log.Debug(cw, "Cubic increment", "wCubic", wCubic, "window", cw.window)
 }
 
 func (cw *CUBICCongestionWindow) IncreaseWindow() {
 	cw.mutex.Lock()
 
 	// slow start
-	if cw.window <= cw.ssthresh {
-		cw.window += 1
+	if cw.window < cw.ssthresh {
+		cw.window += cw.aiStep
 	} else {
 		// congestion avoidance
 		cw.CubicUpdate()
@@ -92,7 +109,7 @@ func (cw *CUBICCongestionWindow) IncreaseWindow() {
 
 	cw.mutex.Unlock()
 
-	cw.EmitWindowEvent(time.Now(), cw.Size())
+	cw.EmitWindowEvent(time.Now(), cw.Size())	// window change signal
 }
 
 func (cw *CUBICCongestionWindow) DecreaseWindow() {
@@ -110,13 +127,13 @@ func (cw *CUBICCongestionWindow) DecreaseWindow() {
 	}
 
 	// decrease window size
-	cw.window *= cw.mdCoef
+	cw.window = math.Max(cw.window * cw.mdCoef, 1)
 	cw.ssthresh = math.Max(cw.window, cw.minSsthresh)
 	cw.lastDecrease = time.Now()
 
 	cw.mutex.Unlock()
 
-	cw.EmitWindowEvent(time.Now(), cw.Size())
+	cw.EmitWindowEvent(time.Now(), cw.Size())	// window change signal
 }
 
 func (cw *CUBICCongestionWindow) EventChannel() <-chan WindowEvent {
