@@ -48,7 +48,7 @@ func (cw *AIMDCongestionWindow) Size() int {
 	cw.mutex.RLock()
 	defer cw.mutex.RUnlock()
 
-	return int(math.Floor(cw.window))
+	return int(cw.window)
 }
 
 func (cw *AIMDCongestionWindow) IncreaseWindow() {
