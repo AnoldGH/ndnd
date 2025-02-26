@@ -51,11 +51,11 @@ func newRrSegFetcher(client *Client) rrSegFetcher {
 		mutex:       sync.RWMutex{},
 		client:      client,
 		streams:     make([]*ConsumeState, 0),
-		window:      cong.NewFixedCongestionWindow(100),
+		window:      cong.NewCUBICCongestionWindow(100),
 		outstanding: 0,
 		retxQueue: 	 list.New(),
 		txCounter: 	 make(map[*ConsumeState]int),
-		maxRetries:  3,
+		maxRetries:  -1,
 	}
 }
 
