@@ -8,6 +8,7 @@ type CongestionSignal int
 const (
 	SigData = iota	// data is fetched
 	SigLoss			// data loss detected
+	SigTimeout		// timeout detected
 	SigCongest		// congestion detected (e.g. NACK with a reason of congestion)
 )
 
