@@ -1,0 +1,11 @@
+repo:
+  # [required] Name of the repo service
+  name: /ndnd/repo/test1
+  # [required] Repo storage directory
+  storage_dir: /etc/ndn/repo/test1/storage
+  # [required] Keychain URI for security
+  # - Example: dir:///absolute/path/to/keychain
+  keychain: "dir:///etc/ndn/repo/keys"
+  # [required] List of full names of all trust anchors
+  trust_anchors:
+    - "/ndnd/repo/test1/KEY/%E5%95V%EC%B7%94%16%A7/NA/v=1754092510003"
