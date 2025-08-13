@@ -101,7 +101,7 @@ func (p *RepoProducerFacing) onNodeNotify(args ndn.InterestHandlerArgs) {
 
 	commandType := command.CommandType
 	srcName := command.SrcName.Name
-	log.Info(p, "Received direct command", "commandName", commandType, "srcName", srcName) // TODO: need to come up with a better name
+	log.Info(p, "Received responsible node command", "commandName", commandType, "srcName", srcName) // TODO: need a better name
 
 	p.processCommandHandler(command)
 }

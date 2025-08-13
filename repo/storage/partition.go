@@ -34,7 +34,7 @@ type Partition struct {
 	svsGroup  *ndn_sync.SvsALO // the SVS group
 
 	// commands
-	commands map[string]*tlv.RepoCommand
+	commands *types.RandomAccessDoubleLinkedList[string, *tlv.RepoCommand]
 
 	// storage
 	size           uint64 // the estimated size of the partition, in bytes
@@ -44,7 +44,8 @@ type Partition struct {
 	status PartitionStatus // current status of the partition
 
 	// repo shared resource
-	repo *types.RepoShared
+	repo    *types.RepoShared
+	storage *RepoStorage
 }
 
 func (p *Partition) String() string {
@@ -53,16 +54,17 @@ func (p *Partition) String() string {
 
 // NewPartition creates a new partition
 // TODO: need more parameters to create a partition
-func NewPartition(id uint64, repo *types.RepoShared) *Partition {
+func NewPartition(id uint64, repo *types.RepoShared, storage *RepoStorage) *Partition {
 	return &Partition{
 		id:             id,
 		size:           0,
 		svsPrefix:      nil,
 		svsGroup:       nil,
 		status:         Registered,
-		commands:       make(map[string]*tlv.RepoCommand),
+		commands:       types.NewRandomAccessDoubleLinkedList[string, *tlv.RepoCommand](),
 		userSyncGroups: make(map[string]*PartitionSvs),
 		repo:           repo,
+		storage:        storage,
 	}
 }
 
@@ -124,7 +126,7 @@ func (p *Partition) Start() (err error) {
 				}
 
 				// handle command
-				p.HandleCommand(command)
+				p.CommitCommand(command)
 			}
 		} else {
 			// Process the publication.
@@ -137,7 +139,7 @@ func (p *Partition) Start() (err error) {
 			}
 
 			// handle command
-			p.HandleCommand(command)
+			p.CommitCommand(command)
 		}
 	})
 
@@ -196,9 +198,70 @@ func (p *Partition) Snap() enc.Wire {
 	}
 
 	// TODO: optimization: if there is a delete command after insert, we don't need to include either in the snapshot
-	for _, entry := range p.commands {
-		snap.Commands = append(snap.Commands, entry)
+	for it := p.commands.Begin(); it != p.commands.End(); it = it.Next() {
+		snap.Commands = append(snap.Commands, it.Value())
 	}
 
 	return snap.Encode()
+}
+
+// Commit operations ensure commands are persisted to the commands list
+// However, it doesn't ensure the data is available yet. (i.e. the client could still be fetching data)
+func (p *Partition) CommitCommand(command *tlv.RepoCommand) (err error) {
+	switch command.CommandType {
+	case "INSERT":
+		return p.CommitInsert(command)
+	case "DELETE":
+		return p.CommitDelete(command)
+	case "JOIN":
+		return p.CommitJoin(command)
+	case "LEAVE":
+		return p.CommitLeave(command)
+	}
+
+	return fmt.Errorf("unknown command type: %s", command.CommandType)
+}
+
+// name: name of the data
+// command: the command that inserted the data
+// data: the data that was inserted
+func (p *Partition) CommitInsert(command *tlv.RepoCommand) (err error) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.commands.PushBack(command.SrcName.Name.String(), command)
+	p.storage.fetchDataHandler(command.SrcName.Name)
+
+	return nil
+}
+
+func (p *Partition) CommitDelete(command *tlv.RepoCommand) (err error) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.commands.Remove(command.SrcName.Name.String())
+
+	return nil
+}
+
+func (p *Partition) CommitJoin(command *tlv.RepoCommand) (err error) {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	// TODO: join user sync group
+
+	p.commands.PushBack(command.SrcName.Name.String(), command)
+
+	return nil
+}
+
+func (p *Partition) CommitLeave(command *tlv.RepoCommand) (err error) {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	// TODO: leave user sync group
+
+	p.commands.Remove(command.SrcName.Name.String())
+
+	return nil
 }
